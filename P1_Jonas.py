@@ -35,7 +35,7 @@ def R2(y_data, y_model):
 
 
 np.random.seed(153)
-N = 500
+N = 100
 x = np.random.rand(N)
 y = np.random.rand(N)
 X,Y = np.meshgrid(x,y)
@@ -101,7 +101,7 @@ print("")
 
 
 """
-##### With bootstrapping #######
+##### Bootstrapping #######
 print("------- BOOTSTRAPPING (OLS) --------")
 X_design = np.zeros((N, (poly+1)**2))
 k=0
@@ -151,59 +151,28 @@ print("")
 
 
 
-##### With cross-validation #######
+##### Cross-validation #######
 print("------- Cross-validations (OLS) --------")
 X_design = np.zeros((N, (poly+1)**2))
-k=0
 
 t0 = t.time()
 train_error_cv = np.zeros(len(model_complex))
 test_error_cv = np.zeros(len(model_complex))
-folds = 5
+k = 5
 
-for i,j in zip(X_complex, Y_complex):
-    X_design[:,k] = x**i * y**j
-
-for i,j in zip(X_complex, Y_complex):
-    X_design[:,k] = x**i * y**j
-    X_train, X_test, y_train, y_test = train_test_split(X_design, franke, test_size=0.3)
-    scaler = StandardScaler()
-    scaler.fit(X_train)
-    X_train_scaled = scaler.transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    lam = 1e-10
-    XT_X = X_train_scaled.T @ X_train_scaled + lam*np.identity(len(X_train_scaled[0,:]))
-    beta = np.linalg.inv(XT_X) @ X_train_scaled.T @ y_train
-
-    ytilde = X_train_scaled @ beta
-    ypredict = X_test_scaled @ beta
-
-    train_error_bs[k] += MSE(y_train, ytilde)
-    test_error_bs[k] += MSE(y_test, ypredict)
-
-    print("Degree: %i/%i        Trial: %i %%          " % (k, len(X_complex), 100*I/trials), end="\r")
-
-    train_error_bs[k] /= trials
-    test_error_bs[k] /= trials
-
-    k += 1
-print("\n Runtime: %.1f s" % (t.time()-t0))
-#print("Training R2 for OLS")
-#print(R2(y_train, ytilde))
-print("Training MSE for OLS (bootstrapping)")
-print(MSE(y_train, ytilde))
-print("")
-
-#print("Test R2 for OLS")
-#print(R2(y_test, ypredict))
-print("Test MSE OLS (bootstrapping)")
-print(MSE(y_test, ypredict))
-print("")
+# shuffle dataset in both axis
+for i in range(N):
+    np.random.shuffle(franke[:,i])
+for i in range(N):
+    np.random.shuffle(franke[i,:])
 
 
+groups = np.zeros((k, int(N/k), N))
+print(groups.size == franke.size)
 
+for i in range(k):
 
+    groups[i,:,:] =
 
 
 
@@ -251,8 +220,8 @@ ax_pred.set_zlabel('Z axis')
 plt.show()
 """
 
-
-###### Solution of first part of b) ############
+"""
+###### Plotting train and test MSE for various methods ############
 fig_error, ax_error = plt.subplots()
 check = len(X_complex)
 #ax_error.plot(model_complex[:check], train_error[:check], label="Train (OLS)", color="black")
@@ -263,7 +232,7 @@ ax_error.grid(); ax_error.legend()
 fig_error.suptitle("train/test error")#; fig_error.tight_layout()
 ax_error.set_xlabel("Complexity"); ax_error.set_ylabel("MSE")
 plt.show()
-
+"""
 
 
 
