@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import KFold
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.model_selection import cross_val_score as cvs
 import time as t
 
 
@@ -33,9 +36,10 @@ def R2(y_data, y_model):
 
 
 
-
+######## Producing dataset and complexity ###########
 np.random.seed(153)
-N = 100
+kfold = 5
+N = kfold * 24
 x = np.random.rand(N)
 y = np.random.rand(N)
 X,Y = np.meshgrid(x,y)
@@ -45,14 +49,12 @@ franke = FrankeFunction(X,Y)
 noise = np.random.normal(0, 1, (N,N))
 franke = franke + noise             # random data (dataset)
 
+#X_complex = np.array([0, 1,0, 2,1,0, 3,2,1,0, 4,3,2,1,0, 5,4,3,2,1,0, 5,4,3,2,1, 5,4,3,2, 5,4,3, 5,4, 5]).astype("int")
+#Y_complex = np.array([0, 0,1, 0,1,2, 0,1,2,3, 0,1,2,3,4, 0,1,2,3,4,5, 1,2,3,4,5, 2,3,4,5, 3,4,5, 4,5, 5]).astype("int")
+X_complex = np.array([1,0, 2,1,0, 3,2,1,0, 4,3,2,1,0, 5,4,3,2,1,0, 5,4,3,2,1, 5,4,3,2, 5,4,3, 5,4, 5]).astype("int")
+Y_complex = np.array([0,1, 0,1,2, 0,1,2,3, 0,1,2,3,4, 0,1,2,3,4,5, 1,2,3,4,5, 2,3,4,5, 3,4,5, 4,5, 5]).astype("int")
 
-X_complex = np.array([0, 1,0, 2,1,0, 3,2,1,0, 4,3,2,1,0, 5,4,3,2,1,0, 5,4,3,2,1, 5,4,3,2, 5,4,3, 5,4, 5]).astype("int")
-Y_complex = np.array([0, 0,1, 0,1,2, 0,1,2,3, 0,1,2,3,4, 0,1,2,3,4,5, 1,2,3,4,5, 2,3,4,5, 3,4,5, 4,5, 5]).astype("int")
-#X_complex = np.array([1,0, 2,1,0, 3,2,1,0, 4,3,2,1,0, 5,4,3,2,1,0, 5,4,3,2,1, 5,4,3,2, 5,4,3, 5,4, 5]).astype("int")
-#Y_complex = np.array([0,1, 0,1,2, 0,1,2,3, 0,1,2,3,4, 0,1,2,3,4,5, 1,2,3,4,5, 2,3,4,5, 3,4,5, 4,5, 5]).astype("int")
-
-model_complex = np.linspace(0, (poly+1)**2, (poly+1)**2).astype("int")
-
+model_complex = np.linspace(1, (poly+1)**2, (poly+1)**2).astype("int")
 
 """
 ##### Without resampling #######
@@ -154,26 +156,85 @@ print("")
 ##### Cross-validation #######
 print("------- Cross-validations (OLS) --------")
 X_design = np.zeros((N, (poly+1)**2))
+X_design[:,0] = 1.0
+
+"""
+mse_cv = np.zeros((poly+1)**2)
+k = 5
+folds = KFold(n_splits=k)
+
+
+for degree in range(1, len(model_complex)):
+    for deg in range(degree):
+        X_design[:, deg] = x**(X_complex[deg]) * y**(Y_complex[deg])
+        OLS = LinearRegression()
+    mse_folds = cvs(OLS, X_design, franke, scoring="neg_mean_squared_error", cv=folds)
+    mse_cv[degree] = np.mean(-mse_folds)
+
+plt.plot(model_complex, mse_cv)
+plt.show()
+
+"""
 
 t0 = t.time()
 train_error_cv = np.zeros(len(model_complex))
 test_error_cv = np.zeros(len(model_complex))
-k = 5
 
-# shuffle dataset in both axis
+# shuffle dataset through both axis
 for i in range(N):
     np.random.shuffle(franke[:,i])
 for i in range(N):
     np.random.shuffle(franke[i,:])
 
 
+k = kfold               # number of k-foldings
+folds = KFold(n_splits=k)
+
+# scale?
+
+split = int(N/k)
+data_split = np.zeros((k, split, N))
+
+for i in range(N):
+    K = int(i/split)
+    s = int(i-K*split)
+    #print(i, K, s)
+    data_split[K,s,:] = franke[:,i]
+
+train_sets = [i for i in range(k)]
+test_set = np.random.randint(0,k)
+train_sets.remove(test_set)
+#print(train_sets, test_set)
+
+
+"""
+K = 1
+for i,j in zip(X_complex, Y_complex):
+    X_design[:,K] = x**i * y**j
+    for train_fold, test_fold in folds.split(x):
+        print(train_fold)
+"""
+
+
+
+"""
 groups = np.zeros((k, int(N/k), N))
 print(groups.size == franke.size)
 
+test = np.array([1,2,3,4,5,6,7,8,9,10])
+test_split = np.array((k, int(len(test)/k), len(test)))
+print("k: ", k, "           N: ", N)
 for i in range(k):
+    split = int(N/k)
+    s0 = int(i*split + i*split/len(test) + 0.5)
+    s1 = int((i+1)*split + (i-1)*split/len(test))
+    print(split, s0, s1, franke[s0:s1, :].shape)
+    groups[i, :, :] = franke[s0:s1, :]
 
-    groups[i,:,:] =
-
+    #split = int(len(test)/k)
+    #split0 = int()
+    #print(i, int(i*split + i*split/len(test) + 0.5), int((i+1)*split + (i-1)*split/len(test)))
+"""
 
 
 
