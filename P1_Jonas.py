@@ -35,19 +35,22 @@ def R2(y_data, y_model):
     return 1 - (num/denum)
 
 
+# Produce dataset
+def franke_func(N, seed=False):
+    if seed == True:
+        np.random.seed(153)
+    x = np.random.rand(N)
+    y = np.random.rand(N)
+    X,Y = np.meshgrid(x,y)
+    franke = FrankeFunction(X,Y) + np.random.normal(0,1,(N,N))      # the dataset
+    return x, y, franke
 
-######## Producing dataset and complexity ###########
-np.random.seed(153)
+
 kfold = 5
 N = kfold * 24
-x = np.random.rand(N)
-y = np.random.rand(N)
-X,Y = np.meshgrid(x,y)
 poly = 5
 
-franke = FrankeFunction(X,Y)
-noise = np.random.normal(0, 1, (N,N))
-franke = franke + noise             # random data (dataset)
+x, y, franke = franke_func(N, seed=True)
 
 X_complex = np.array([0, 1,0, 2,1,0, 3,2,1,0, 4,3,2,1,0, 5,4,3,2,1,0, 5,4,3,2,1, 5,4,3,2, 5,4,3, 5,4, 5]).astype("int")
 Y_complex = np.array([0, 0,1, 0,1,2, 0,1,2,3, 0,1,2,3,4, 0,1,2,3,4,5, 1,2,3,4,5, 2,3,4,5, 3,4,5, 4,5, 5]).astype("int")
@@ -55,9 +58,10 @@ Y_complex = np.array([0, 0,1, 0,1,2, 0,1,2,3, 0,1,2,3,4, 0,1,2,3,4,5, 1,2,3,4,5,
 #Y_complex = np.array([0,1, 0,1,2, 0,1,2,3, 0,1,2,3,4, 0,1,2,3,4,5, 1,2,3,4,5, 2,3,4,5, 3,4,5, 4,5, 5]).astype("int")
 
 model_complex = np.linspace(1, (poly+1)**2, (poly+1)**2).astype("int")
+#model_complex = np.linspace(1, len(X_complex), len(X_complex).astype("int")
 
 """
-##### Without resampling #######
+##### Without resampling (part a) #######
 print("------- WITHOUT RESAMPLING (OLS) --------")
 X_design = np.zeros((N, (poly+1)**2))
 k=0
@@ -103,7 +107,7 @@ print("")
 
 
 """
-##### Bootstrapping #######
+##### Bootstrapping (part b) #######
 print("------- BOOTSTRAPPING (OLS) --------")
 X_design = np.zeros((N, (poly+1)**2))
 k=0
@@ -153,7 +157,10 @@ print("")
 
 
 
-##### Cross-validation #######
+
+
+"""
+##### Cross-validation (part c) #######
 print("------- Cross-validations (OLS) --------")
 X_design = np.zeros((N, (poly+1)**2))
 X_design[:,0] = 1.0
@@ -250,24 +257,55 @@ for degree in range(1, (poly+1)**2):
 
     mse_skl_fold = cross_val_score(OLS, X=Xd_skl, y=franke, scoring='neg_mean_squared_error', cv=k)
     mse_skl[degree] = np.mean(-mse_skl_fold)
-
-
-
-
-
-
-
-
-
 """
-print("franke shape:        ", franke.shape)
-print("ytilde shape:        ", ytilde.shape)
-print("ypredict shape:      ", ypredict.shape)
-print("X_train shape:       ", X_train.shape)
-print("X_test shape:        ", X_test.shape)
-print("y_train shape:       ", y_train.shape)
-print("y_test shape:        ", y_test.shape)
-"""
+
+
+
+
+
+##### Ridge Regression (inversion) (part d) #######
+print("------- Ridge Regression --------")
+x,y,franke = franke_func(N,seed=True)
+X_design = np.zeros((N, (poly+1)**2))
+lambdas = np.logspace(-10,0,100)
+I = np.identity((poly+1)**2)
+mse_ridge_train = np.zeros((poly+1)**2)
+mse_ridge_test = np.zeros((poly+1)**2)
+
+m = 0
+for i,j in zip(X_complex, Y_complex):
+    X_design[:,m] = x**i * y**j
+    m += 1
+
+m = 0
+for i,j in zip(X_complex, Y_complex):
+    #X_design[:,m] = x**i * y**j
+    X_train, X_test, y_train, y_test = train_test_split(X_design, franke, test_size=0.2)
+    scaler = StandardScaler()
+    scaler.fit(X_train)
+    X_train_scaled = scaler.transform(X_train)
+
+    for lamb in lambdas:
+        #beta_ridge = (X_train.T @ X_train + lamb*I) @ X_train.T @ y_train
+        beta_ridge = (X_train_scaled.T @ X_train_scaled + lamb*I) @ X_train_scaled.T @ y_train
+
+        #ytilde = X_train @ beta_ridge
+        ytilde = X_train_scaled @ beta_ridge
+        ypredict = X_test @ beta_ridge
+
+        mse_ridge_train[m] += MSE(y_train, ytilde)
+        mse_ridge_test[m] += MSE(y_test, ypredict)
+
+    mse_ridge_train[m] /= len(lambdas)
+    mse_ridge_test[m] /= len(lambdas)
+    m += 1
+
+
+
+plt.plot(model_complex, np.log10(mse_ridge_train))
+plt.plot(model_complex, np.log10(mse_ridge_test))
+plt.show()
+
 
 
 
@@ -276,10 +314,9 @@ print("y_test shape:        ", y_test.shape)
 """################## PLOTTING ########################"""
 
 """
-fig_ran = plt.figure("Random")
-fig_pred = plt.figure("Predict")
+###### Plotting random data using Franke function #######
+fig_ran = plt.figure("Random data")
 ax_ran = fig_ran.gca(projection="3d")
-ax_pred = fig_pred.gca(projection="3d")
 
 ran = ax_ran.scatter(X, Y, franke, s=2, c=franke)
 fig_ran.colorbar(ran, shrink=0.5, aspect=5)
@@ -289,18 +326,9 @@ ax_ran.set_zlabel('Z axis')
 plt.show()
 """
 
-"""
-pred = ax_pred.scatter(X, Y, ytilde, s=2, c=franke)
-#pred = ax_pred.plot_surface(X, Y, ytilde)
-fig_pred.colorbar(pred, shrink=0.5, aspect=5)
-ax_pred.set_xlabel('X axis')
-ax_pred.set_ylabel('Y axis')
-ax_pred.set_zlabel('Z axis')
-plt.show()
-"""
 
 """
-###### Plotting train and test MSE for various methods ############
+###### Plotting train and test MSE for various methods (part a and b plot)############
 fig_error, ax_error = plt.subplots()
 check = len(X_complex)
 #ax_error.plot(model_complex[:check], train_error[:check], label="Train (OLS)", color="black")
@@ -314,8 +342,8 @@ plt.show()
 """
 
 
-##### Plotting test MSE (OLS) using CV ######
-
+"""
+##### Plotting test MSE (OLS) using CV (part c plot) ######
 mse_cv = np.mean(scores, axis=1)
 plt.plot(model_complex, np.log10(mse_cv), label="Produced code")
 plt.plot(polynomial, np.log10(mse_skl), label="skl code")
@@ -323,7 +351,7 @@ plt.title("MSE of test data using CV (OLS)")
 plt.grid(); plt.legend()
 plt.xlabel("Complexity"); plt.ylabel("Mean square error (log10)")
 plt.show()
-
+"""
 
 
 
